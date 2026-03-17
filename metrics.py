@@ -220,6 +220,8 @@ class Compare:
         self.A.useLabels = False
         self.B.useLabels = False
 
+        self.bsd = None
+
     def getVolDiff(self, diff_only=False):
         out = [
             a.getVolDiff(b, diff_only=diff_only)
@@ -251,17 +253,19 @@ class Compare:
         return out
 
     def getBSDDiff(self, mode="all"):
-        bsd = [a.getBSD(b, bi_only=True) for a, b in zip(self.A.masks, self.B.masks)]
-        out = bsd
+        if self.bsd == None:
+            self.bsd = [
+                a.getBSD(b, bi_only=True) for a, b in zip(self.A.masks, self.B.masks)
+            ]
 
         if mode.lower() == "asd":
-            out = [seriesAnalysis(b)[3] for b in bsd]
+            out = [seriesAnalysis(b)[3] for b in self.bsd]
         elif mode.lower() == "hd":
-            out = [seriesAnalysis(b)[-1] for b in bsd]
+            out = [seriesAnalysis(b)[-1] for b in self.bsd]
         elif mode.lower() == "hd95":
-            out = [seriesAnalysis(b)[-2] for b in bsd]
+            out = [seriesAnalysis(b)[-2] for b in self.bsd]
         else:
-            out = [seriesAnalysis(b) for b in bsd]
+            out = [seriesAnalysis(b) for b in self.bsd]
 
         if self.useLabels:
             return dict(zip(self.labels, out))
