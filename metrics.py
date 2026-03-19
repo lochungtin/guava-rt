@@ -69,6 +69,10 @@ class Mask:
         selfAligned = self.alignTo(mask)
         stD, _ = selfAligned.maskDMap(mask.surface)
         tsD, _ = mask.maskDMap(selfAligned.surface)
+
+        print(selfAligned.center_of_mass)
+        print(mask.center_of_mass)
+
         if bi_only:
             return np.concatenate([stD, tsD])
         return np.concatenate([stD, tsD]), stD, tsD
