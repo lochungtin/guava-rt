@@ -4,11 +4,13 @@ from typing import Optional, Sequence, Union
 
 import torch
 
+__all__ = ["distance_transform_edt"]
+
+
 def distance_transform_edt(
     input: torch.Tensor,
     sampling: Optional[Union[float, Sequence[float]]] = None,
-):
-
+) -> torch.Tensor:
     if not isinstance(input, torch.Tensor):
         raise TypeError(f"input must be a torch.Tensor, got {type(input)!r}")
 
@@ -43,7 +45,8 @@ def distance_transform_edt(
 
     return sq.sqrt().to(torch.float32)
 
-def _edt_axis_binary(sq: torch.Tensor, axis: int, sp: float):
+
+def _edt_axis_binary(sq: torch.Tensor, axis: int, sp: float) -> torch.Tensor:
     sq = sq.movedim(axis, -1)
     shape = sq.shape
     L = shape[-1]
@@ -55,7 +58,7 @@ def _edt_axis_binary(sq: torch.Tensor, axis: int, sp: float):
     INF = float("inf")
 
     q = torch.arange(L, dtype=torch.float64, device=device)
-    
+
     bg = torch.isfinite(g)
     bg_pos_l = torch.where(bg, q.unsqueeze(0).expand(M, L), g.new_full((M, L), -INF))
     nearest_l = torch.cummax(bg_pos_l, dim=1).values
@@ -77,16 +80,17 @@ def _edt_axis_binary(sq: torch.Tensor, axis: int, sp: float):
     return result.reshape(shape).movedim(-1, axis)
 
 
-def _edt_axis(sq: torch.Tensor, axis: int, sp: float):
+def _edt_axis(sq: torch.Tensor, axis: int, sp: float) -> torch.Tensor:
     sq = sq.movedim(axis, -1).contiguous()
     shape = sq.shape
     L = shape[-1]
     M = sq.numel() // L
+
     out = _meijster_compiled(sq.reshape(M, L), sp)
     return out.reshape(shape).movedim(-1, axis)
 
 
-def _meijster(g: torch.Tensor, sp: float):
+def _meijster(g: torch.Tensor, sp: float) -> torch.Tensor:
     M, L = g.shape
     device = g.device
     sp2 = sp * sp
@@ -115,7 +119,7 @@ def _meijster(g: torch.Tensor, sp: float):
         while active.any():
             bi = bidx[active]
             ki = ks[bi]
-            
+
             is_empty = ki < 0
             if is_empty.any():
                 be = bi[is_empty]
@@ -180,14 +184,17 @@ def _meijster(g: torch.Tensor, sp: float):
     result[~has_bg] = INF
     return result
 
+
 try:
     _compiled = torch.compile(_meijster)
-    def _meijster_compiled(g: "torch.Tensor", sp: float):
+
+    def _meijster_compiled(g: "torch.Tensor", sp: float) -> "torch.Tensor":
         global _meijster_compiled, _compiled
         try:
             return _compiled(g, sp)
         except Exception:
             _meijster_compiled = _meijster
             return _meijster(g, sp)
+
 except Exception:
     _meijster_compiled = _meijster
