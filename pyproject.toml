@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "GUAVA"
+version = "0.1.0"
+description = "A geometrical upright-supine anatomical variation analysis framework"
+keywords = [""]
+readme = "README.md"
+authors = [
+    { name = "Chung Tin Lo", email = "lochungtin@gmail.com" },
+    { name = "Jamie McClelland },
+    { name = "Tracy Underwood" } 
+]
+license = { text = "MIT" }
+license-files = ["LICEN[CS]E.*"]
+requires-python = ">=3.9"
+dependencies = [
+    "torch",
+    "torchvision",
+]
+keywords = ["upright", "supine", "anatomy", "image", "geometrical", "analysis", "metrics"]
+
+[project.urls]
+Homepage = "https://github.com/lochungtin/GUAVA"
+Repository = "https://github.com/lochungtin/GUAVA.git"
+"Bug Tracker" = "https://github.com/lochungtin/GUAVA/issues"
+Changelog = "https://github.com/lochungtin/GUAVA/blob/master/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
