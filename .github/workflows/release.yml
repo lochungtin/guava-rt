@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0  # REQUIRED for commitizen
 
       - name: Fetch main branch
-        run: git fetch origin main --depth=1
+        run: git fetch origin ${{ github.event.repository.default_branch }} --depth=1
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -30,7 +30,7 @@ jobs:
 
       # ✅ Enforce commit message format
       - name: Check commit messages
-        run: cz check --rev-range origin/main..HEAD
+        run: cz check --rev-range origin/${{ github.event.repository.default_branch }}..HEAD
 
       - name: Validate commit messages
         uses: wagoid/commitlint-github-action@v6
