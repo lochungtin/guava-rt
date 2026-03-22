@@ -1,7 +1,8 @@
-## v0.1.3 (2026-03-22)
+## v0.1.4 (2026-03-22)
 
 ### Fix
 
+- retrigger issue becoming a loopback
 - retrigger issue with auto publish
 - updated token, purge, attempt auto publish
 - remove everything and start again
