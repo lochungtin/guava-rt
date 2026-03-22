@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: guava-rt
+Version: 0.1.0
+Summary: A geometrical upright-supine anatomical variation analysis framework
+Author: Jamie McClelland, Tracy Underwood
+Author-email: Chung Tin Lo <lochungtin@gmail.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/lochungtin/GUAVA
+Project-URL: Repository, https://github.com/lochungtin/GUAVA.git
+Project-URL: Bug Tracker, https://github.com/lochungtin/GUAVA/issues
+Project-URL: Changelog, https://github.com/lochungtin/GUAVA/blob/master/CHANGELOG.md
+Keywords: upright,supine,anatomy,medical images,geometrical,analysis,metrics
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: torch
+Requires-Dist: torchvision
