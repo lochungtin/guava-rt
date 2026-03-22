@@ -15,6 +15,9 @@ jobs:
         with:
           fetch-depth: 0  # REQUIRED for commitizen
 
+      - name: Fetch main branch
+        run: git fetch origin main --depth=1
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -28,6 +31,9 @@ jobs:
       # ✅ Enforce commit message format
       - name: Check commit messages
         run: cz check --rev-range origin/main..HEAD
+
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@v6
 
       # ✅ Bump version + generate changelog
       - name: Bump version and generate changelog
