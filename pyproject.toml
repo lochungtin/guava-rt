@@ -35,3 +35,9 @@ where = ["src"]
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "no-local-version"
+
+# pyproject.toml
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.10"
+tag_format = "v$version"
