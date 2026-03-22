@@ -1,3 +1,11 @@
+## v0.2.1 (2026-03-22)
+
+### Fix
+
+- update readme to retrigger actions
+- remove and retry
+- pathing and naming
+
 ## v0.2.0 (2026-03-22)
 
 ### Feat
