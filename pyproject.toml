@@ -41,3 +41,5 @@ local_scheme = "no-local-version"
 name = "cz_conventional_commits"
 version = "0.1.10"
 tag_format = "v$version"
+version_files = ["pyproject.toml:version"]
+
