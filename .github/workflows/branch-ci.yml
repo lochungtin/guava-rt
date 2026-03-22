@@ -125,29 +125,30 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version and update CHANGELOG
+      - name: Bump version
         run: |
+          # Let cz bump do exactly one thing: update version files, commit,
+          # and create the tag. No changelog here — that comes next as a
+          # separate commit so we never need to amend (which caused .post0).
           cz bump --yes
 
-          # Capture the tag BEFORE amending — cz bump tags the current HEAD,
-          # and amending rewrites the SHA, orphaning the tag from git describe.
+          # Store the new tag for the push steps below.
           TAG=$(git tag --sort=-version:refname | head -n1)
           echo "NEW_TAG=$TAG" >> "$GITHUB_ENV"
 
+      - name: Update CHANGELOG
+        run: |
           cz changelog
           git add CHANGELOG.md
-          git commit --amend --no-edit
+          # Only commit if there are staged changes (first release has no diff).
+          git diff --cached --quiet || git commit -m "docs: update CHANGELOG for $NEW_TAG [skip ci]"
 
-          # Re-point the tag at the amended HEAD so branch and tag are in sync.
-          git tag -f "$TAG" HEAD
-
-      - name: Push branch commit
-        # Separate push so this retriggers branch-ci.yml, where guard detects
-        # the bot committer and skips all downstream jobs cleanly.
+      - name: Push branch commits
+        # Pushes the bump commit + the changelog commit (if any).
+        # Retriggers branch-ci.yml but guard skips it — the [skip ci] tag
+        # on the changelog commit also suppresses any stray runs.
         run: git push origin HEAD
 
       - name: Push tag separately
         # Separate push so GitHub fires release.yml as its own workflow run.
-        # Using --follow-tags or a combined push only triggers one run (branch),
-        # causing release.yml to be silently skipped.
         run: git push origin "$NEW_TAG"
