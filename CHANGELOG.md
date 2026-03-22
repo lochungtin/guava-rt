@@ -1,7 +1,8 @@
-## v0.1.1 (2026-03-22)
+## v0.1.2 (2026-03-22)
 
 ### Fix
 
+- retrigger issue with auto publish
 - updated token, purge, attempt auto publish
 - remove everything and start again
 - check commit message step v9
