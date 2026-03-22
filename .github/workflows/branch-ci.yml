@@ -128,19 +128,26 @@ jobs:
       - name: Bump version and update CHANGELOG
         run: |
           cz bump --yes
+
+          # Capture the tag BEFORE amending — cz bump tags the current HEAD,
+          # and amending rewrites the SHA, orphaning the tag from git describe.
+          TAG=$(git tag --sort=-version:refname | head -n1)
+          echo "NEW_TAG=$TAG" >> "$GITHUB_ENV"
+
           cz changelog
           git add CHANGELOG.md
           git commit --amend --no-edit
 
+          # Re-point the tag at the amended HEAD so branch and tag are in sync.
+          git tag -f "$TAG" HEAD
+
       - name: Push branch commit
-        # Push the bump commit to the branch first (separate from the tag).
-        # This retriggers branch-ci.yml, but guard will see the bot and skip all jobs.
+        # Separate push so this retriggers branch-ci.yml, where guard detects
+        # the bot committer and skips all downstream jobs cleanly.
         run: git push origin HEAD
 
       - name: Push tag separately
-        # Push the tag in a separate push event so GitHub fires release.yml
-        # independently. A combined `git push --follow-tags` only fires one
-        # workflow run (for the branch ref), causing release.yml to be missed.
-        run: |
-          TAG=$(git describe --tags --abbrev=0)
-          git push origin "$TAG"
+        # Separate push so GitHub fires release.yml as its own workflow run.
+        # Using --follow-tags or a combined push only triggers one run (branch),
+        # causing release.yml to be silently skipped.
+        run: git push origin "$NEW_TAG"
