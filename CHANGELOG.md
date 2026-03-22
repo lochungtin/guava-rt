@@ -1,3 +1,9 @@
+## v0.2.4 (2026-03-22)
+
+### Fix
+
+- remove all bare imports
+
 ## v0.2.3 (2026-03-22)
 
 ### Fix
