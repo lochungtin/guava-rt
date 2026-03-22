@@ -125,13 +125,22 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version, update CHANGELOG, push tag
+      - name: Bump version and update CHANGELOG
         run: |
           cz bump --yes
           cz changelog
           git add CHANGELOG.md
           git commit --amend --no-edit
-          git push --follow-tags
-        # Pushes the bump commit (branch) + a new vX.Y.Z tag.
-        # Branch push → re-triggers branch-ci.yml → guard sees bot → all jobs skipped.
-        # Tag push    → triggers release.yml → build → publish-pypi.
+
+      - name: Push branch commit
+        # Push the bump commit to the branch first (separate from the tag).
+        # This retriggers branch-ci.yml, but guard will see the bot and skip all jobs.
+        run: git push origin HEAD
+
+      - name: Push tag separately
+        # Push the tag in a separate push event so GitHub fires release.yml
+        # independently. A combined `git push --follow-tags` only fires one
+        # workflow run (for the branch ref), causing release.yml to be missed.
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          git push origin "$TAG"
