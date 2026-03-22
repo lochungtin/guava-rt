@@ -33,7 +33,7 @@ Changelog = "https://github.com/lochungtin/GUAVA/blob/master/CHANGELOG.md"
 where = ["src"]
 
 [tool.setuptools_scm]
-version_scheme = "post-release"
+version_scheme = "no-guess-dev"
 local_scheme = "no-local-version"
 
 # pyproject.toml
