@@ -1,6 +1,6 @@
 # guava-rt
 
-**guava-rt** is a PyTorch-native library implementing a standardised geometric analysis framework for comparing binary segmentation masks. It was developed to quantify anatomical variation between upright and supine patient positions in radiotherapy (RT) research, though its metrics are general-purpose and applicable to any binary mask comparison task in 2-D or 3-D voxel space.
+**guava-rt** is a PyTorch-native library implementing a standardised **G**eometric **U**pright-supine **A**natomical **V**arition **A**nalysis framework for comparing binary segmentation masks. It was developed to quantify anatomical variation between upright and supine patient positions in radiotherapy (RT) research, though its metrics are general-purpose and applicable to any binary mask comparison task in 2-D or 3-D voxel space.
 
 The library provides formal, mathematically reproducible implementations of a suite of geometric metrics — from simple volume and surface area differences through to bidirectional surface discrepancy, separation distance distributions, ray-cast visible surfaces, and discretised distance thresholding. All computation runs natively on PyTorch tensors with CPU and CUDA support.
 
