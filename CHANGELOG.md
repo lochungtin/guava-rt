@@ -1,3 +1,9 @@
+## v0.2.0 (2026-03-22)
+
+### Feat
+
+- Add readme, official release
+
 ## v0.1.10 (2026-03-22)
 
 ### Fix
