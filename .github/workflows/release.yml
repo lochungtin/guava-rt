@@ -8,7 +8,6 @@ on:
     tags:
       - "v*.*.*"
 
-# Cancel any in-progress run on the same ref so rapid pushes don't queue.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -17,152 +16,127 @@ permissions:
   contents: write
   id-token: write
 
+# ═══════════════════════════════════════════════════════════════════════
+#  BRANCH FLOW  (push to main/master, but NOT from the release bot)
+#
+#   commitizen-check → build → publish-testpypi → auto-bump
+#
+#  auto-bump does `git push --follow-tags`, which fires two events:
+#    • branch push  → skipped entirely by the bot-guard below
+#    • tag push     → handled by the TAG FLOW below
+# ═══════════════════════════════════════════════════════════════════════
+
+  # ── guard ────────────────────────────────────────────────────────────
+  # Detect whether this branch push was made by the release bot.
+  # All branch jobs depend on this and bail when is_bot == 'true'.
+  # ─────────────────────────────────────────────────────────────────────
 jobs:
-  # ─────────────────────────────────────────────────────────────────────
-  # GUARD — exit immediately if this push was made by the bot's cz bump.
-  # This breaks the cycle: bot pushes bump commit → branch trigger fires
-  # → guard detects bot committer → all downstream jobs are skipped.
-  # The tag pushed alongside the bump commit fires its own separate
-  # tag-triggered run which goes straight to publish-pypi.
-  # ─────────────────────────────────────────────────────────────────────
   guard:
-    name: Skip bot bump commits
+    name: Guard – skip bot commits
     runs-on: ubuntu-latest
+    if: github.ref_type == 'branch'
     outputs:
       is_bot: ${{ steps.check.outputs.is_bot }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Check if commit is from the release bot
+      - name: Detect bot committer
         id: check
         run: |
           COMMITTER=$(git log -1 --pretty=format:'%ae')
-          echo "Committer: $COMMITTER"
+          echo "Committer email: $COMMITTER"
           if [[ "$COMMITTER" == "github-actions[bot]@users.noreply.github.com" ]]; then
-            echo "is_bot=true" >> "$GITHUB_OUTPUT"
+            echo "is_bot=true"  >> "$GITHUB_OUTPUT"
           else
             echo "is_bot=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ─────────────────────────────────────────────
-  # 1. Lint & validate commit messages (all runs)
-  # ─────────────────────────────────────────────
+  # ── 1. commitizen-check ──────────────────────────────────────────────
   commitizen-check:
     name: Lint Commits (Commitizen)
     runs-on: ubuntu-latest
     needs: guard
-    if: needs.guard.outputs.is_bot == 'false'
+    if: github.ref_type == 'branch' && needs.guard.outputs.is_bot == 'false'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0          # full history needed by cz
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Install Commitizen
-        run: pip install commitizen
-
-      - name: Check commit messages
-        run: cz check --rev-range origin/HEAD..HEAD || true
-        # `|| true` keeps CI green on merge commits / initial commits;
-        # tighten to `cz check --rev-range origin/HEAD..HEAD` once your
-        # team is fully on conventional commits.
-
-  # ─────────────────────────────────────────────
-  # 2. Build the distribution (all runs)
-  # ─────────────────────────────────────────────
-  build:
-    name: Build Distribution
-    runs-on: ubuntu-latest
-    needs: [guard, commitizen-check]
-    if: needs.guard.outputs.is_bot == 'false'
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Install build tools
-        run: pip install build commitizen
+      - run: pip install commitizen
 
-      - name: Get current version
-        id: get_version
-        run: echo "version=$(cz version --project)" >> "$GITHUB_OUTPUT"
+      - name: Check commit messages
+        run: cz check --rev-range origin/HEAD..HEAD || true
+
+  # ── 2. build (branch) ────────────────────────────────────────────────
+  build-branch:
+    name: Build Distribution (branch)
+    runs-on: ubuntu-latest
+    needs: commitizen-check
+    if: github.ref_type == 'branch' && needs.guard.outputs.is_bot == 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - run: pip install build commitizen
 
       - name: Build sdist & wheel
         run: python -m build
 
-      - name: Upload dist artefacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-branch
           path: dist/
 
-  # ─────────────────────────────────────────────
-  # 3. Publish to TestPyPI  (branch pushes only)
-  # ─────────────────────────────────────────────
+  # ── 3. publish-testpypi ──────────────────────────────────────────────
   publish-testpypi:
     name: Publish → TestPyPI
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-branch
     if: github.ref_type == 'branch'
     environment:
       name: testpypi
       url: https://test.pypi.org/project/guava-rt/
     steps:
-      - name: Download dist artefacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-branch
           path: dist/
 
       - name: Publish to TestPyPI (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          skip-existing: true     # keeps re-runs idempotent
+          skip-existing: true
 
-  # ─────────────────────────────────────────────
-  # 4. Bump version + changelog  (branch pushes)
-  #    Commitizen commits the bump and pushes a
-  #    new vX.Y.Z tag, which triggers job 5.
-  # ─────────────────────────────────────────────
+  # ── 4. auto-bump ─────────────────────────────────────────────────────
   auto-bump:
     name: Auto Bump Version & Changelog
     runs-on: ubuntu-latest
     needs: publish-testpypi
     if: github.ref_type == 'branch'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}   # PAT with repo + workflow scope
+          token: ${{ secrets.RELEASE_TOKEN }}
 
-      # fetch-depth: 0 fetches commits but tags are not always synced —
-      # fetch them explicitly so cz bump can find the previous tag.
       - name: Fetch all tags
         run: git fetch --tags --force
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Install Commitizen
-        run: pip install commitizen
+      - run: pip install commitizen
 
       - name: Configure git identity
         run: |
@@ -176,36 +150,57 @@ jobs:
           git add CHANGELOG.md
           git commit --amend --no-edit
           git push --follow-tags
-        # `cz bump` reads conventional commits since the last tag,
-        # increments semver accordingly, creates the new vX.Y.Z tag.
-        # `cz changelog` regenerates the full CHANGELOG.md cleanly and
-        # is amended into the bump commit before pushing.
-        #
-        # The branch push of this commit will retrigger the workflow,
-        # but the `guard` job will detect the bot committer and skip
-        # all downstream jobs. Only the tag push proceeds to publish-pypi.
+        # Pushes the bump commit (branch) + a new vX.Y.Z tag.
+        # Branch push → re-triggers workflow → guard detects bot → skipped.
+        # Tag push   → triggers the TAG FLOW below → publish-pypi.
 
-  # ─────────────────────────────────────────────
-  # 5. Publish to PyPI + GitHub Release  (tags)
-  # ─────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+#  TAG FLOW  (push of a v*.*.* tag only — no branch jobs involved)
+#
+#   build-tag → publish-pypi
+# ═══════════════════════════════════════════════════════════════════════
+
+  # ── 5. build (tag) ───────────────────────────────────────────────────
+  build-tag:
+    name: Build Distribution (tag)
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - run: pip install build commitizen
+
+      - name: Build sdist & wheel
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-tag
+          path: dist/
+
+  # ── 6. publish-pypi ──────────────────────────────────────────────────
   publish-pypi:
     name: Publish → PyPI & GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-tag
     if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
     environment:
       name: pypi
       url: https://pypi.org/project/guava-rt/
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download dist artefacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-tag
           path: dist/
 
       - name: Publish to PyPI (OIDC)
@@ -214,11 +209,10 @@ jobs:
       - name: Extract changelog for this release
         id: changelog
         run: |
-          # Pull the block between the two most recent "## v" headings
           NOTES=$(awk '/^## /{found++} found==1{print} found==2{exit}' CHANGELOG.md)
           echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES"    >> "$GITHUB_OUTPUT"
-          echo "EOF"        >> "$GITHUB_OUTPUT"
+          echo "$NOTES"     >> "$GITHUB_OUTPUT"
+          echo "EOF"         >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
