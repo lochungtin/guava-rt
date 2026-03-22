@@ -92,7 +92,7 @@ jobs:
       - name: Generate changelog
         run: |
           pip install commitizen
-          cz changelog --yes
+          cz changelog
 
       - name: Commit and push changelog
         run: |
