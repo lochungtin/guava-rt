@@ -1,7 +1,8 @@
-## v0.1.7 (2026-03-22)
+## v0.1.8 (2026-03-22)
 
 ### Fix
 
+- attempt to trigger release.yml
 - split job files - retrigger
 - split job files
 - remove job branching
