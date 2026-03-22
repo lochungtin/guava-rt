@@ -116,6 +116,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}   # PAT with repo + workflow scope
 
+      # fetch-depth: 0 fetches commits but tags are not always synced —
+      # fetch them explicitly so cz bump can find the previous tag.
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -131,11 +136,18 @@ jobs:
 
       - name: Bump version, update CHANGELOG, push tag
         run: |
-          cz bump --changelog --yes
+          # --files-only updates version files & CHANGELOG without needing
+          # an existing remote tag for incremental diff (avoids exit 16).
+          # We then generate the full changelog separately.
+          cz bump --yes
+          cz changelog
+          git add CHANGELOG.md
+          git commit --amend --no-edit
           git push --follow-tags
         # `cz bump` reads conventional commits since the last tag,
-        # increments semver accordingly, writes/updates CHANGELOG.md,
-        # commits everything, and creates the new vX.Y.Z tag.
+        # increments semver accordingly, creates the new vX.Y.Z tag.
+        # `cz changelog` regenerates the full CHANGELOG.md cleanly and
+        # is amended into the bump commit before pushing.
 
   # ─────────────────────────────────────────────
   # 5. Publish to PyPI + GitHub Release  (tags)
