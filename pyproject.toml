@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "guava-rt"
-version = "0.1.0"
+version = "0.1.1"
 description = "A geometrical upright-supine anatomical variation analysis framework"
 readme = "README.md"
 authors = [
