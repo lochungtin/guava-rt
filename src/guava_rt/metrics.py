@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from region import Region
-from mask import Mask
-from utils import seriesAnalysis
+from .region import Region
+from .mask import Mask
+from .utils import seriesAnalysis
 
 
 class Metrics:

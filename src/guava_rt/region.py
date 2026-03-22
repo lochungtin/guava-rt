@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from mask import Mask
+from .mask import Mask
 
 
 class Region:

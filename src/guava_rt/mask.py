@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn.functional as F
-from distance_transform_edt import distance_transform_edt
+from .distance_transform_edt import distance_transform_edt
 
 
 class Mask:

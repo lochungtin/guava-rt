@@ -4,8 +4,6 @@ from typing import Optional, Sequence, Union
 
 import torch
 
-__all__ = ["distance_transform_edt"]
-
 
 def distance_transform_edt(
     input: torch.Tensor,
