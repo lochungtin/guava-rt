@@ -1,7 +1,8 @@
-## v0.1.4 (2026-03-22)
+## v0.1.5 (2026-03-22)
 
 ### Fix
 
+- remove job branching
 - retrigger issue becoming a loopback
 - retrigger issue with auto publish
 - updated token, purge, attempt auto publish
