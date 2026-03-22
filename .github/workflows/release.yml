@@ -2,81 +2,22 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - "v*.*.*"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: write
   id-token: write
 
-# ═══════════════════════════════════════════════════════════════════════
-#  BRANCH FLOW  (push to main/master, but NOT from the release bot)
-#
-#   commitizen-check → build → publish-testpypi → auto-bump
-#
-#  auto-bump does `git push --follow-tags`, which fires two events:
-#    • branch push  → skipped entirely by the bot-guard below
-#    • tag push     → handled by the TAG FLOW below
-# ═══════════════════════════════════════════════════════════════════════
-
-  # ── guard ────────────────────────────────────────────────────────────
-  # Detect whether this branch push was made by the release bot.
-  # All branch jobs depend on this and bail when is_bot == 'true'.
-  # ─────────────────────────────────────────────────────────────────────
 jobs:
-  guard:
-    name: Guard – skip bot commits
+  # ── 1. Build ──────────────────────────────────────────────────────────
+  build:
+    name: Build Distribution
     runs-on: ubuntu-latest
-    if: github.ref_type == 'branch'
-    outputs:
-      is_bot: ${{ steps.check.outputs.is_bot }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Detect bot committer
-        id: check
-        run: |
-          COMMITTER=$(git log -1 --pretty=format:'%ae')
-          echo "Committer email: $COMMITTER"
-          if [[ "$COMMITTER" == "github-actions[bot]@users.noreply.github.com" ]]; then
-            echo "is_bot=true"  >> "$GITHUB_OUTPUT"
-          else
-            echo "is_bot=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # ── 1. commitizen-check ──────────────────────────────────────────────
-  commitizen-check:
-    name: Lint Commits (Commitizen)
-    runs-on: ubuntu-latest
-    needs: guard
-    if: github.ref_type == 'branch' && needs.guard.outputs.is_bot == 'false'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - run: pip install commitizen
-
-      - name: Check commit messages
-        run: cz check --rev-range origin/HEAD..HEAD || true
-
-  # ── 2. build (branch) ────────────────────────────────────────────────
-  build-branch:
-    name: Build Distribution (branch)
-    runs-on: ubuntu-latest
-    needs: commitizen-check
-    if: github.ref_type == 'branch' && needs.guard.outputs.is_bot == 'false'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -93,103 +34,14 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-branch
+          name: dist
           path: dist/
 
-  # ── 3. publish-testpypi ──────────────────────────────────────────────
-  publish-testpypi:
-    name: Publish → TestPyPI
-    runs-on: ubuntu-latest
-    needs: build-branch
-    if: github.ref_type == 'branch'
-    environment:
-      name: testpypi
-      url: https://test.pypi.org/project/guava-rt/
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-branch
-          path: dist/
-
-      - name: Publish to TestPyPI (OIDC)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-
-  # ── 4. auto-bump ─────────────────────────────────────────────────────
-  auto-bump:
-    name: Auto Bump Version & Changelog
-    runs-on: ubuntu-latest
-    needs: publish-testpypi
-    if: github.ref_type == 'branch'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
-
-      - name: Fetch all tags
-        run: git fetch --tags --force
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - run: pip install commitizen
-
-      - name: Configure git identity
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump version, update CHANGELOG, push tag
-        run: |
-          cz bump --yes
-          cz changelog
-          git add CHANGELOG.md
-          git commit --amend --no-edit
-          git push --follow-tags
-        # Pushes the bump commit (branch) + a new vX.Y.Z tag.
-        # Branch push → re-triggers workflow → guard detects bot → skipped.
-        # Tag push   → triggers the TAG FLOW below → publish-pypi.
-
-# ═══════════════════════════════════════════════════════════════════════
-#  TAG FLOW  (push of a v*.*.* tag only — no branch jobs involved)
-#
-#   build-tag → publish-pypi
-# ═══════════════════════════════════════════════════════════════════════
-
-  # ── 5. build (tag) ───────────────────────────────────────────────────
-  build-tag:
-    name: Build Distribution (tag)
-    runs-on: ubuntu-latest
-    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - run: pip install build commitizen
-
-      - name: Build sdist & wheel
-        run: python -m build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-tag
-          path: dist/
-
-  # ── 6. publish-pypi ──────────────────────────────────────────────────
+  # ── 2. Publish to PyPI + create GitHub Release ────────────────────────
   publish-pypi:
     name: Publish → PyPI & GitHub Release
     runs-on: ubuntu-latest
-    needs: build-tag
-    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
     environment:
       name: pypi
       url: https://pypi.org/project/guava-rt/
@@ -200,7 +52,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: dist-tag
+          name: dist
           path: dist/
 
       - name: Publish to PyPI (OIDC)
