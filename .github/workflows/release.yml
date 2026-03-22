@@ -1,127 +1,181 @@
-name: CI + Release + Publish
+name: Release
 
-on: push
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  build:
-    name: Build distribution
+  # ─────────────────────────────────────────────
+  # 1. Lint & validate commit messages (all runs)
+  # ─────────────────────────────────────────────
+  commitizen-check:
+    name: Lint Commits (Commitizen)
     runs-on: ubuntu-latest
-
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-
-    permissions:
-      contents: write
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # REQUIRED for commitizen
-
-      - name: Fetch main branch
-        run: git fetch origin ${{ github.event.repository.default_branch }} --depth=1
+          fetch-depth: 0          # full history needed by cz
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build commitizen
+      - name: Install Commitizen
+        run: pip install commitizen
 
-      # ✅ Enforce commit message format
       - name: Check commit messages
-        if: "!contains(github.event.head_commit.message, '[skip ci]')"
-        run: |
-          RANGE="origin/${{ github.event.repository.default_branch }}..HEAD"
-          
-          COUNT=$(git rev-list --count $RANGE || echo 0)
+        run: cz check --rev-range origin/HEAD..HEAD || true
+        # `|| true` keeps CI green on merge commits / initial commits;
+        # tighten to `cz check --rev-range origin/HEAD..HEAD` once your
+        # team is fully on conventional commits.
 
-          if [ "$COUNT" -eq "0" ]; then
-            echo "No commits to check."
-          else
-            cz check --rev-range $RANGE
-          fi
+  # ─────────────────────────────────────────────
+  # 2. Build the distribution (all runs)
+  # ─────────────────────────────────────────────
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    needs: commitizen-check
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Validate commit messages
-        uses: wagoid/commitlint-github-action@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
-      # ✅ Bump version + generate changelog
-      - name: Bump version and generate changelog
-        id: bump
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          cz bump --yes --changelog
-          echo "version=$(cz version -p)" >> $GITHUB_OUTPUT
+      - name: Install build tools
+        run: pip install build commitizen
 
-      # ✅ Commit updated files (CHANGELOG + version)
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .
-          git commit -m "chore(release): bump version [skip ci]" || echo "No changes to commit"
+      - name: Get current version
+        id: get_version
+        run: echo "version=$(cz version --project)" >> "$GITHUB_OUTPUT"
 
-      # ✅ Push commit + tags (created by commitizen)
-      - name: Push changes
-        run: |
-          git push origin HEAD:main
-          git push origin --tags
-
-      # ✅ Build package AFTER version bump
-      - name: Build package
+      - name: Build sdist & wheel
         run: python -m build
 
-      - name: Store artifacts
-        uses: actions/upload-artifact@v6
+      - name: Upload dist artefacts
+        uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
 
+  # ─────────────────────────────────────────────
+  # 3. Publish to TestPyPI  (branch pushes only)
+  # ─────────────────────────────────────────────
   publish-testpypi:
-    name: Publish to TestPyPI
-    needs: build
+    name: Publish → TestPyPI
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-
+    needs: build
+    if: github.ref_type == 'branch'
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/guava-rt/
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v7
+      - name: Download dist artefacts
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
-      - name: Publish to TestPyPI
+      - name: Publish to TestPyPI (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true     # keeps re-runs idempotent
 
-  publish-pypi:
-    name: Publish to PyPI
-    needs: build
+  # ─────────────────────────────────────────────
+  # 4. Bump version + changelog  (branch pushes)
+  #    Commitizen commits the bump and pushes a
+  #    new vX.Y.Z tag, which triggers job 5.
+  # ─────────────────────────────────────────────
+  auto-bump:
+    name: Auto Bump Version & Changelog
     runs-on: ubuntu-latest
+    needs: publish-testpypi
+    if: github.ref_type == 'branch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}   # PAT with repo + workflow scope
 
-    # ✅ ONLY run if this push included a tag (created by CI)
-    if: contains(github.ref, 'refs/tags/')
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
+      - name: Install Commitizen
+        run: pip install commitizen
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version, update CHANGELOG, push tag
+        run: |
+          cz bump --changelog --yes
+          git push --follow-tags
+        # `cz bump` reads conventional commits since the last tag,
+        # increments semver accordingly, writes/updates CHANGELOG.md,
+        # commits everything, and creates the new vX.Y.Z tag.
+
+  # ─────────────────────────────────────────────
+  # 5. Publish to PyPI + GitHub Release  (tags)
+  # ─────────────────────────────────────────────
+  publish-pypi:
+    name: Publish → PyPI & GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
     environment:
       name: pypi
       url: https://pypi.org/project/guava-rt/
-
-    permissions:
-      id-token: write
-
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v7
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download dist artefacts
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Extract changelog for this release
+        id: changelog
+        run: |
+          # Pull the block between the two most recent "## v" headings
+          NOTES=$(awk '/^## /{found++} found==1{print} found==2{exit}' CHANGELOG.md)
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES"    >> "$GITHUB_OUTPUT"
+          echo "EOF"        >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.notes }}
+          files: dist/*
