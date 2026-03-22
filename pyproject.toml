@@ -39,7 +39,7 @@ local_scheme = "no-local-version"
 # pyproject.toml
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.2.2"
+version = "0.2.3"
 tag_format = "v$version"
 version_files = ["pyproject.toml:version"]
 
