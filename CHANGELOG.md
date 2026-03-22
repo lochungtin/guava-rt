@@ -1,3 +1,9 @@
+## v0.2.5 (2026-03-22)
+
+### Fix
+
+- remove version tag from init
+
 ## v0.2.4 (2026-03-22)
 
 ### Fix
