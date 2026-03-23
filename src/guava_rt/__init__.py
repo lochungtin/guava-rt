@@ -1,7 +1,7 @@
 from .mask import Mask
-from .region import Region
 from .metrics import Metrics
-from .utils import prettyPrintTable, seriesAnalysis, SERIES_ANALYSIS_LABELS
+from .region import Region
+from .utils import SERIES_ANALYSIS_LABELS, prettyPrintTable, seriesAnalysis
 
 __all__ = [
     "Mask",

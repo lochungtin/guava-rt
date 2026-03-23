@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+
 from .mask import Mask
 
 
@@ -111,4 +112,8 @@ class Region:
         if self.useLabels:
             non_target = [l for i, l in enumerate(self.labels) if i != self.target_idx]
             return dict(zip(non_target, out))
+        return out
+        return out
+        return out
+        return out
         return out

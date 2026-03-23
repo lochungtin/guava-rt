@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn.functional as F
+
 from .distance_transform_edt import distance_transform_edt
 
 
@@ -185,4 +186,8 @@ def _binary_erosion(mask: torch.BoolTensor):
         kernel[0, 0, :, 1] = 1.0
         n_ones = int(kernel.sum().item())
         result = F.conv2d(m, kernel, padding=1).reshape(shape)
+    return (result >= n_ones) & mask
+    return (result >= n_ones) & mask
+    return (result >= n_ones) & mask
+    return (result >= n_ones) & mask
     return (result >= n_ones) & mask

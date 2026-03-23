@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from .region import Region
+
 from .mask import Mask
+from .region import Region
 from .utils import seriesAnalysis
 
 
@@ -177,4 +178,8 @@ class Metrics:
                 l for i, l in enumerate(self.labels) if i != self.A.target_idx
             ]
             return dict(zip(non_target, out))
+        return out
+        return out
+        return out
+        return out
         return out
