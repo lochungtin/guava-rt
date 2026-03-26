@@ -1,3 +1,9 @@
+## v0.2.6 (2026-03-26)
+
+### Fix
+
+- add bins to threshold overlap output
+
 ## v0.2.5 (2026-03-22)
 
 ### Fix
