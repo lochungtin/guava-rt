@@ -1,3 +1,9 @@
+## v0.2.8 (2026-03-26)
+
+### Fix
+
+- return distances in discretised thresholding
+
 ## v0.2.7 (2026-03-26)
 
 ### Fix
