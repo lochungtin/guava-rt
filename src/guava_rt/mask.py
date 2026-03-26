@@ -187,7 +187,3 @@ def _binary_erosion(mask: torch.BoolTensor):
         n_ones = int(kernel.sum().item())
         result = F.conv2d(m, kernel, padding=1).reshape(shape)
     return (result >= n_ones) & mask
-    return (result >= n_ones) & mask
-    return (result >= n_ones) & mask
-    return (result >= n_ones) & mask
-    return (result >= n_ones) & mask

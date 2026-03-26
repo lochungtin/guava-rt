@@ -97,23 +97,25 @@ class Region:
 
             percs = torch.zeros(max(d_max - d_min + 1, 1), device=self.dev)
             full = torch.zeros(max_dist + 1, device=self.dev)
+            bins = torch.zeros(max_dist + 1, device=self.dev)
 
             for j, thresh in enumerate(range(d_min, d_max + 1)):
-                p = (d_vals <= thresh).float().sum() / n_mask
+                s = (d_vals <= thresh).float().sum()
+                p = s / n_mask
                 percs[j] = p
                 if thresh <= max_dist:
                     full[thresh] = p
+                    bins[thresh] = s
 
             if d_max <= max_dist:
                 full[d_max:] = 1.0
+                bins[thresh] = n_mask
 
-            out.append(percs if percentages_only else [percs, full, _masked, _mask])
+            out.append(
+                percs if percentages_only else [percs, full, bins, _masked, _mask]
+            )
 
         if self.useLabels:
             non_target = [l for i, l in enumerate(self.labels) if i != self.target_idx]
             return dict(zip(non_target, out))
-        return out
-        return out
-        return out
-        return out
         return out

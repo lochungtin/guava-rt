@@ -126,10 +126,15 @@ class Metrics:
         if distances_only:
             out = [[f(dA) - f(dB), f(dA), f(dB)] for dA, dB in zip(distA, distB)]
         else:
-            out = [[f(a[0]) - f(b[0]), f(a[0]), f(b[0]), *a, *b] for a, b in zip(distA, distB)]
+            out = [
+                [f(a[0]) - f(b[0]), f(a[0]), f(b[0]), *a, *b]
+                for a, b in zip(distA, distB)
+            ]
 
         if self.useLabels:
-            non_target = [l for i, l in enumerate(self.labels) if i != self.A.target_idx]
+            non_target = [
+                l for i, l in enumerate(self.labels) if i != self.A.target_idx
+            ]
             return dict(zip(non_target, out))
         return out
 
@@ -169,6 +174,8 @@ class Metrics:
             ]
 
         if self.useLabels:
-            non_target = [l for i, l in enumerate(self.labels) if i != self.A.target_idx]
+            non_target = [
+                l for i, l in enumerate(self.labels) if i != self.A.target_idx
+            ]
             return dict(zip(non_target, out))
         return out
