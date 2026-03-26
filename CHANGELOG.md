@@ -1,3 +1,9 @@
+## v0.2.7 (2026-03-26)
+
+### Fix
+
+- overlap bins array filling
+
 ## v0.2.6 (2026-03-26)
 
 ### Fix
