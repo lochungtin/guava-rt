@@ -109,7 +109,7 @@ class Region:
 
             if d_max <= max_dist:
                 full[d_max:] = 1.0
-                bins[thresh] = n_mask
+                bins[d_max:] = n_mask
 
             out.append(
                 percs if percentages_only else [percs, full, bins, _masked, _mask]
