@@ -111,9 +111,7 @@ class Region:
                 full[d_max:] = 1.0
                 bins[d_max:] = n_mask
 
-            out.append(
-                percs if percentages_only else [percs, full, bins, _masked, _mask]
-            )
+            out.append(percs if percentages_only else [percs, full, bins, d_vals, _masked, _mask])
 
         if self.useLabels:
             non_target = [l for i, l in enumerate(self.labels) if i != self.target_idx]
