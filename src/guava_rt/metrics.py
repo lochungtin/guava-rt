@@ -45,9 +45,6 @@ class Metrics:
         self.useLabels = A.useLabels
         self.labels = A.labels
 
-        self.A.useLabels = False
-        self.B.useLabels = False
-
         self.bsd = None
 
         self.dev = dev
@@ -107,6 +104,11 @@ class Metrics:
             mode=mask, distances_only=distances_only, chunk_size=chunk_size
         )
 
+        if self.A.useLabels:
+            distA = list(distA.values())
+        if self.B.useLabels:
+            distB = list(distB.values())
+
         ml = mode.lower()
         if ml == "max":
             f = lambda x: x.float().max()
@@ -151,6 +153,11 @@ class Metrics:
         percB = self.B.getThresholdedOverlapPercentages(
             mode=mode, percentages_only=percentages_only, chunk_size=chunk_size
         )
+
+        if self.A.useLabels:
+            percA = list(percA.values())
+        if self.B.useLabels:
+            percB = list(percB.values())
 
         if percentages_only:
             out = [
