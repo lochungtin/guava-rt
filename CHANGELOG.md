@@ -1,3 +1,9 @@
+## v0.2.9 (2026-07-15)
+
+### Fix
+
+- allow reusing region objects in metric object creation
+
 ## v0.2.8 (2026-03-26)
 
 ### Fix
