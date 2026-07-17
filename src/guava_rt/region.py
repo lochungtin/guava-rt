@@ -34,6 +34,12 @@ class Region:
 
         self.target_dmap = self.target_mask.dmap()
 
+    def __getitem__(self, key):
+        if key not in self.labels:
+            return None
+        i = self.labels.index(key)
+        return self.masks[i]
+
     # ------------------------------------------------------------------
     def _getDisplacementVector(self, mask: Mask, useAnchor: bool) -> torch.Tensor:
         ref = self.anchor if useAnchor else self.target_mask.center_of_mass
