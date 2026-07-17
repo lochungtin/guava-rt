@@ -48,6 +48,9 @@ class Mask:
             self._sdmap = distance_transform_edt(~self.surface())
         return self._sdmap
 
+    def numpy(self):
+        return self.mask.numpy()
+
     # ------------------------------------------------------------------
     def getVolDiff(self, mask: Mask):
         val = (self.volume - mask.volume).item()
