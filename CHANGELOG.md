@@ -1,3 +1,9 @@
+## v0.4.0 (2026-07-17)
+
+### Feat
+
+- make region subscriptable
+
 ## v0.3.1 (2026-07-17)
 
 ### Fix
