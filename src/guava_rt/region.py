@@ -20,9 +20,9 @@ class Region:
         self.labels = labels
         self.dev = dev
 
+        self.target = target
         self.target_idx = self.labels.index(target) if self.useLabels else target
-        self.target = self.target_idx
-        self.target_mask: Mask = self.masks[self.target]
+        self.target_mask: Mask = self.masks[self.target_idx]
 
         if isinstance(anchor, np.ndarray):
             self.anchor = torch.from_numpy(anchor).float().to(self.dev)
@@ -111,7 +111,11 @@ class Region:
                 full[d_max:] = 1.0
                 bins[d_max:] = n_mask
 
-            out.append(percs if percentages_only else [percs, full, bins, d_vals, _masked, _mask])
+            out.append(
+                percs
+                if percentages_only
+                else [percs, full, bins, d_vals, _masked, _mask]
+            )
 
         if self.useLabels:
             non_target = [l for i, l in enumerate(self.labels) if i != self.target_idx]
