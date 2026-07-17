@@ -1,3 +1,9 @@
+## v0.5.0 (2026-07-17)
+
+### Feat
+
+- easy numpy conversion function
+
 ## v0.4.0 (2026-07-17)
 
 ### Feat
