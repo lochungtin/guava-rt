@@ -1,3 +1,9 @@
+## v0.3.0 (2026-07-17)
+
+### Feat
+
+- maunal whole region alignment
+
 ## v0.2.9 (2026-07-15)
 
 ### Fix
