@@ -71,6 +71,20 @@ class Metrics:
             return dict(zip(self.labels, out))
         return out
 
+    def alignA2B(self):
+        shiftVec = self.B.anchor - self.A.anchor
+        newMasks = [m.alignTo(shift_vec=shiftVec) for m in self.A.masks]
+        return (
+            Region(
+                *newMasks,
+                target=self.A.target,
+                anchor=self.A.anchor,
+                labels=self.A.labels,
+                dev=self.A.dev,
+            ),
+            self.B,
+        )
+
     # ------------------------------------------------------------------
     def getBSDDiff(self, mode: str = "all"):
         if self.bsd is None:

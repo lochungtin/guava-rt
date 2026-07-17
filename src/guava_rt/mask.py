@@ -85,8 +85,11 @@ class Mask:
         return torch.argwhere(self.surface())
 
     # ------------------------------------------------------------------
-    def alignTo(self, target: Mask):
-        shift_vec = target.center_of_mass - self.center_of_mass
+    def alignTo(self, target: Mask | None = None, shift_vec: np.ndarray | None = None):
+        assert not (target is None and shift_vec is None)
+
+        if shift_vec is None:
+            shift_vec = target.center_of_mass - self.center_of_mass
 
         x = self.mask.float().unsqueeze(0).unsqueeze(0)
 
