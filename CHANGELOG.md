@@ -1,3 +1,9 @@
+## v0.6.0 (2026-10-12)
+
+### Feat
+
+- snake_case API, test suite and uv/hatch project setup
+
 ## v0.5.1 (2026-08-04)
 
 ### Fix
