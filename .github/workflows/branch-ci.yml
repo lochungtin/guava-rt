@@ -55,11 +55,44 @@ jobs:
       - name: Check commit messages
         run: cz check --rev-range origin/HEAD..HEAD || true
 
-  # ── 2. Build ──────────────────────────────────────────────────────────
+  # ── 2. Lint, type-check and test (CPU torch) ──────────────────────────
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: guard
+    if: needs.guard.outputs.is_bot == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install (CPU torch)
+        run: |
+          uv venv
+          uv pip install --torch-backend=cpu -e ".[dev]"
+
+      - name: Lint & type-check
+        if: matrix.python-version == '3.12'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+          uv run --no-sync mypy
+
+      - run: uv run --no-sync pytest
+
+  # ── 3. Build ──────────────────────────────────────────────────────────
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
-    needs: commitizen-check
+    needs: [guard, commitizen-check, test]
     if: needs.guard.outputs.is_bot == 'false'
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +113,7 @@ jobs:
           name: dist
           path: dist/
 
-  # ── 3. Publish to TestPyPI ────────────────────────────────────────────
+  # ── 4. Publish to TestPyPI ────────────────────────────────────────────
   publish-testpypi:
     name: Publish → TestPyPI
     runs-on: ubuntu-latest
@@ -100,7 +133,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
-  # ── 4. Bump version + push tag ────────────────────────────────────────
+  # ── 5. Bump version + push tag ────────────────────────────────────────
   auto-bump:
     name: Auto Bump Version & Changelog
     runs-on: ubuntu-latest

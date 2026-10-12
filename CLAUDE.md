@@ -14,13 +14,13 @@ guava-rt (`guava_rt`) is a PyTorch library of geometric metrics for comparing bi
 
 ## Release / CI
 
-The project setup mirrors `../pyNiftiReg`, except that `.github/workflows` has not been updated yet: CI builds and releases but does not run the tests, ruff or mypy.
+The project setup, including `.github/workflows`, mirrors `../pyNiftiReg`.
 
 - **Versioning**: the version comes from git tags via hatch-vcs (`no-guess-dev`: untagged commits build as `X.Y.Z.postN.devM`). Never hard-code it in `pyproject.toml`.
 - **Commits must be conventional**: Commitizen derives the version bump and `CHANGELOG.md` from them. `fix:` releases a patch and `feat:` a minor version, each publishing to PyPI. `docs:`, `ci:`, `chore:`, `test:` and `refactor:` don't release, so don't use `fix:` for non-code changes.
 - **The bot pushes to the default branch**: after a release, `cz bump` adds a bump commit and a changelog commit. Run `git pull --ff-only` before committing.
 - **Don't edit `[tool.commitizen] version` or `CHANGELOG.md` by hand**: `cz bump` maintains both.
-- `branch-ci.yml` (push to `main`/`master`): commit lint, build, publish to TestPyPI, then `cz bump` tags `vX.Y.Z` and pushes. `release.yml` (on a `v*.*.*` tag): publish to PyPI and create a GitHub Release.
+- `branch-ci.yml` (push to `main`/`master`): commit lint and tests (CPU torch, Python 3.10–3.13; ruff and mypy on 3.12), build, publish to TestPyPI, then `cz bump` tags `vX.Y.Z` and pushes. It uses `cancel-in-progress`, so don't push while a release run is still going. `release.yml` (on a `v*.*.*` tag): publish to PyPI and create a GitHub Release.
 
 ## Architecture
 
