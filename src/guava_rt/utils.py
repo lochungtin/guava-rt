@@ -1,16 +1,23 @@
+"""Summary statistics and table printing for metric results."""
+
 from __future__ import annotations
 
-import numpy as np
+from collections.abc import Sequence
+from typing import Any
+
 import torch
-import torch.nn.functional as F
+from torch import Tensor
+
+from guava_rt._deprecation import alias, renamed_kwargs
 
 SERIES_ANALYSIS_LABELS = ["MIN", "P05", "P10", "AVG", "MDN", "P90", "P95", "MAX"]
 
 
-def seriesAnalysis(arr):
+def series_analysis(arr: Tensor) -> Tensor:
+    """The 8 statistics named in :data:`SERIES_ANALYSIS_LABELS`; zeros for an empty input."""
     arr = arr.flatten()
     if len(arr) == 0:
-        return torch.zeros(8)
+        return torch.zeros(8, device=arr.device)
     return torch.stack(
         [
             arr.min(),
@@ -25,36 +32,40 @@ def seriesAnalysis(arr):
     )
 
 
-def prettyPrintTable(rowNames, rows, labels, rounding: int = 3, minWidth: int = 0):
-    def pad(data, gaps):
-        return [str(d).ljust(g + 1) for d, g in zip(data, gaps)]
+@renamed_kwargs(rowNames="row_names", minWidth="min_width")
+def pretty_print_table(
+    row_names: Sequence[str],
+    rows: Sequence[Sequence[Any]],
+    labels: Sequence[str],
+    rounding: int = 3,
+    min_width: int = 0,
+) -> None:
+    """Print ``rows`` as a boxed table; floats and scalar tensors are rounded to ``rounding``."""
 
-    for r_idx in range(len(rows)):
-        rows[r_idx] = [
-            (
-                round(
-                    float(i.item()) if isinstance(i, torch.Tensor) else float(i),
-                    rounding,
-                )
-                if isinstance(i, (float, torch.Tensor))
-                else i
-            )
-            for i in rows[r_idx]
-        ]
+    def fmt(value: Any) -> str:
+        if isinstance(value, Tensor):
+            value = float(value.item())
+        if isinstance(value, float):
+            value = round(value, rounding)
+        return str(value)
 
-    gaps = [max(map(len, rowNames))]
-    for i in range(len(labels)):
-        col_max = len(labels[i])
-        for row in rows:
-            col_max = max(len(str(row[i])), col_max, minWidth)
-        gaps.append(col_max)
+    cells = [[fmt(v) for v in row] for row in rows]
+    widths = [max(map(len, row_names))]
+    for i, label in enumerate(labels):
+        widths.append(max([len(label), min_width, *(len(row[i]) for row in cells)]))
 
-    rows = [list(map(str, row)) for row in rows]
-    row_sep = "+" + "+".join("-" * (g + 2) for g in gaps) + "+"
+    def line(items: Sequence[str]) -> str:
+        return "| " + "| ".join(s.ljust(w + 1) for s, w in zip(items, widths, strict=True)) + "|"
 
+    row_sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
     print(row_sep)
-    print("| " + "| ".join(pad([""] + labels, gaps)) + "|")
+    print(line(["", *labels]))
     print(row_sep)
-    for name, row in zip(rowNames, rows):
-        print("| " + "| ".join(pad([name] + row, gaps)) + "|")
+    for name, row in zip(row_names, cells, strict=True):
+        print(line([name, *row]))
         print(row_sep)
+
+
+# Deprecated camelCase API (guava-rt <= 0.5)
+seriesAnalysis = alias(series_analysis, "seriesAnalysis")
+prettyPrintTable = alias(pretty_print_table, "prettyPrintTable")

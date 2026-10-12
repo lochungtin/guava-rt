@@ -26,11 +26,17 @@ The library provides formal, mathematically reproducible implementations of a su
 pip install guava-rt
 ```
 
+### Upgrading from 0.5
+
+The API now uses snake_case names (`getBSDDiff` → `get_bsd_diff`, `alignTo` → `align_to`, `useAnchor=` → `use_anchor=`, `cutAwayDist=` / `N=` → `cut_away_dist=` / `n_steps=`, and so on). The old camelCase methods, keyword arguments and attributes still work but emit a `DeprecationWarning`. `Mask.get_mask_coordinates()` returns an `(N, ndim)` tensor like `get_surface_coordinates()`; the deprecated `getMaskCoordinates()` still returns the old `torch.where` tuple.
+
+BSD results (`get_bsd_diff`) now use the union of both surface-distance directions, as described below. Earlier versions used only the distances from B's surface to A's, so ASD/HD/HD95 values will change.
+
 ## Requirements
 
-- Python ≥ 3.9
-- PyTorch ≥ 2.0
-- NumPy
+- Python ≥ 3.10
+- PyTorch ≥ 2.1
+- NumPy ≥ 1.24
 
 ## Core Concepts
 
@@ -62,10 +68,7 @@ A `Region` holds a collection of `Mask` objects representing multiple anatomical
 ### Basic setup
 
 ```python
-import numpy as np
-from mask import Mask
-from region import Region
-from metrics import Metrics
+from guava_rt import Metrics
 
 # Binary numpy arrays, shape (D, H, W) for 3-D or (H, W) for 2-D
 labels = ["spine", "prostate", "bladder", "rectum"]
@@ -87,10 +90,10 @@ m = Metrics(
 ### Volume and Surface Area
 
 ```python
-vol_diff = m.getVolDiff()
+vol_diff = m.get_vol_diff()
 # {"bladder": (diff, rel_diff, vol_A, vol_B), "rectum": (...), ...}
 
-sa_diff = m.getSADiff()
+sa_diff = m.get_sa_diff()
 ```
 
 Each entry is a tuple of `(absolute_diff, relative_diff, value_A, value_B)`.
@@ -100,7 +103,7 @@ Each entry is a tuple of `(absolute_diff, relative_diff, value_A, value_B)`.
 ### ROI Displacement via Rigid Alignment
 
 ```python
-disp = m.getROIDisplacementDiff()
+disp = m.get_roi_displacement_diff()
 # {"bladder": tensor([dz, dy, dx]), ...}
 ```
 
@@ -124,12 +127,12 @@ displacement = C'_u − C_s  =  C_u − US − C_s
 
 ```python
 # Full statistics (MIN, P05, P10, AVG, MDN, P90, P95, MAX)
-bsd_all = m.getBSDDiff(mode="all")
+bsd_all = m.get_bsd_diff(mode="all")
 
 # Single statistics
-asd  = m.getBSDDiff(mode="asd")    # average surface distance
-hd   = m.getBSDDiff(mode="hd")     # Hausdorff distance
-hd95 = m.getBSDDiff(mode="hd95")   # 95th-percentile Hausdorff distance
+asd  = m.get_bsd_diff(mode="asd")    # average surface distance
+hd   = m.get_bsd_diff(mode="hd")     # Hausdorff distance
+hd95 = m.get_bsd_diff(mode="hd95")   # 95th-percentile Hausdorff distance
 ```
 
 BSD quantifies the geometric difference between two masks by measuring surface-to-surface distances, pixel by pixel. It is computed on COM-aligned masks (each pair is centre-of-mass aligned before the BSD is computed, isolating local shape differences from global positional offsets).
@@ -162,8 +165,8 @@ Measures the distribution of distances from each non-target OAR to the target ma
 # "surface" → only the boundary voxels of the OAR
 # "rcvs"    → only the ray-cast visible surface of the OAR (see below)
 
-sep = m.getSeparationDistanceDiff(mask="volume", mode="mean")
-sep = m.getSeparationDistanceDiff(mask="surface", mode="all")   # full statistics
+sep = m.get_separation_distance_diff(mask="volume", mode="mean")
+sep = m.get_separation_distance_diff(mask="surface", mode="all")   # full statistics
 ```
 
 The `mode` parameter controls how the resulting distance values are summarised: `"min"`, `"max"`, `"mean"`, `"median"`, `"p5"`, `"p95"`, or `"all"` for the full 8-statistic vector `[MIN, P05, P10, AVG, MDN, P90, P95, MAX]`.
@@ -192,7 +195,7 @@ Models the effect of expanding a uniform margin around the target and measuring 
 
 ```python
 # mode: "volume" | "surface" | "rcvs"
-overlap = m.getPercentageOverlapDiff(mode="volume")
+overlap = m.get_percentage_overlap_diff(mode="volume")
 ```
 
 **How it works.** A dilated target mask at radius `r` is defined by thresholding the distance map of the target:
@@ -216,7 +219,7 @@ This is computed for every integer radius from the minimum to the maximum separa
 ## Working directly with `Mask` and `Region`
 
 ```python
-from mask import Mask
+from guava_rt import Mask
 
 m = Mask(my_array, dev="cpu")   # accepts np.ndarray or torch.Tensor
 
@@ -226,17 +229,17 @@ sa     = m.surface_area()       # int32 scalar
 com    = m.center_of_mass       # float tensor, shape (ndim,)
 
 # Align one mask to another by centre-of-mass shift (affine grid_sample, nearest)
-aligned = m.alignTo(other_mask)
+aligned = m.align_to(other_mask)
 
 # Bidirectional surface distance between two masks
-bsd_combined, st_d, ts_d = m.getBSD(other_mask)
+bsd_combined, st_d, ts_d = m.get_bsd(other_mask)
 
 # Ray-cast visible surface with respect to a target mask
-rcvs_mask = m.getRCVS(target_mask, cutAwayDist=8, N=32, chunk_size=1)
+rcvs_mask = m.get_rcvs(target_mask, cut_away_dist=8, n_steps=32, chunk_size=1)
 ```
 
 ```python
-from region import Region
+from guava_rt import Region
 
 r = Region(
     mask_target, mask_oar1, mask_oar2,
@@ -246,9 +249,9 @@ r = Region(
     dev="cpu",
 )
 
-vecs  = r.getDisplacementVectors(useAnchor=True)
-dists = r.getSeparationDistances(mode="surface", distances_only=True)
-percs = r.getThresholdedOverlapPercentages(mode="rcvs")
+vecs  = r.get_displacement_vectors(use_anchor=True)
+dists = r.get_separation_distances(mode="surface", distances_only=True)
+percs = r.get_thresholded_overlap_percentages(mode="rcvs")
 ```
 
 ---
@@ -258,7 +261,7 @@ percs = r.getThresholdedOverlapPercentages(mode="rcvs")
 `distance_transform_edt` is a drop-in PyTorch replacement for `scipy.ndimage.distance_transform_edt`. It supports 2-D and 3-D tensors and optional anisotropic voxel spacing.
 
 ```python
-from distance_transform_edt import distance_transform_edt
+from guava_rt import distance_transform_edt
 import torch
 
 mask = torch.zeros(64, 64, 64, dtype=torch.bool)
@@ -278,15 +281,15 @@ The implementation uses a cummax/cummin scan along the first axis and the Meijst
 ## Utility
 
 ```python
-from utils import seriesAnalysis, prettyPrintTable, SERIES_ANALYSIS_LABELS
+from guava_rt import SERIES_ANALYSIS_LABELS, pretty_print_table, series_analysis
 # SERIES_ANALYSIS_LABELS = ["MIN", "P05", "P10", "AVG", "MDN", "P90", "P95", "MAX"]
 
 # Returns an 8-element tensor of summary statistics
-stats = seriesAnalysis(some_tensor)
+stats = series_analysis(some_tensor)
 
 # Pretty-print a comparison table to stdout
-prettyPrintTable(
-    rowNames=["bladder", "rectum"],
+pretty_print_table(
+    row_names=["bladder", "rectum"],
     rows=[[diff1, val_A1, val_B1], [diff2, val_A2, val_B2]],
     labels=["Diff", "Upright", "Supine"],
     rounding=3,

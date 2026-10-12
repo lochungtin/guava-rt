@@ -1,88 +1,89 @@
+"""Pairwise geometric comparison of two regions (e.g. upright vs. supine)."""
+
 from __future__ import annotations
+
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 import torch
+from torch import Tensor
 
-from .mask import Mask
-from .region import Region
-from .utils import seriesAnalysis
+from guava_rt._deprecation import alias, alias_property
+from guava_rt.mask import ArrayLike, Device, Mask
+from guava_rt.region import Region
+from guava_rt.utils import series_analysis
+
+RegionLike = Region | Sequence[Mask | ArrayLike] | ArrayLike
+
+# Summary statistics for get_separation_distance_diff; any other mode gives series_analysis
+_STATISTICS: dict[str, Callable[[Tensor], Tensor]] = {
+    "max": lambda x: x.float().max(),
+    "min": lambda x: x.float().min(),
+    "p5": lambda x: torch.quantile(x.float(), 0.05),
+    "p95": lambda x: torch.quantile(x.float(), 0.95),
+    "mean": lambda x: x.float().mean(),
+    "median": lambda x: x.float().median(),
+}
 
 
 class Metrics:
+    """Compares region ``A`` against region ``B`` structure by structure.
+
+    ``A`` and ``B`` are :class:`Region` objects or sequences of masks, which are wrapped in a
+    region using ``target`` / ``anchor`` (or the per-side ``target_A`` / ``anchor_B`` etc.)
+    and ``labels``. Structures are paired by position, so both sides must list them in the same
+    order. Every difference is ``A - B``; results are keyed by ``A``'s labels when it has them.
+    """
+
     def __init__(
         self,
-        A: list[Mask | torch.Tensor | np.ndarray] | np.ndarray | torch.Tensor | Region,
-        B: list[Mask | torch.Tensor | np.ndarray] | np.ndarray | torch.Tensor | Region,
+        A: RegionLike,
+        B: RegionLike,
         target: int | str | None = None,
         target_A: int | str | None = None,
         target_B: int | str | None = None,
-        anchor: int | str | np.ndarray | torch.Tensor | None = None,
-        anchor_A: int | str | np.ndarray | torch.Tensor | None = None,
-        anchor_B: int | str | np.ndarray | torch.Tensor | None = None,
+        anchor: int | str | ArrayLike | None = None,
+        anchor_A: int | str | ArrayLike | None = None,
+        anchor_B: int | str | ArrayLike | None = None,
         labels: list[str] | None = None,
-        dev: str = "cpu",
-    ):
-        if isinstance(A, list) or isinstance(A, np.ndarray):
-            A = Region(
-                *A,
-                target=target if target is not None else target_A,
-                anchor=anchor if anchor is not None else anchor_A,
-                labels=labels,
-                dev=dev,
-            )
-        self.A = A
-
-        if isinstance(B, list) or isinstance(B, np.ndarray):
-            B = Region(
-                *B,
-                target=target if target is not None else target_B,
-                anchor=anchor if anchor is not None else anchor_B,
-                labels=labels,
-                dev=dev,
-            )
-        self.B = B
-
-        self.useLabels = A.useLabels
-        self.labels = A.labels
-
-        self.bsd = None
-
+        dev: Device = "cpu",
+    ) -> None:
+        self.A = _as_region(A, target, target_A, anchor, anchor_A, labels, dev)
+        self.B = _as_region(B, target, target_B, anchor, anchor_B, labels, dev)
+        self.use_labels = self.A.use_labels
+        self.labels = self.A.labels
         self.dev = dev
 
-    # ------------------------------------------------------------------
-    def getVolDiff(self):
-        out = [a.getVolDiff(b) for a, b in zip(self.A.masks, self.B.masks)]
-        if self.useLabels:
-            return dict(zip(self.labels, out))
-        return out
+        self._bsd: list[Tensor] | None = None
 
-    def getSADiff(self):
-        out = [a.getSADiff(b) for a, b in zip(self.A.masks, self.B.masks)]
-        if self.useLabels:
-            return dict(zip(self.labels, out))
-        return out
+    def _pairs(self) -> zip[tuple[Mask, Mask]]:
+        return zip(self.A.masks, self.B.masks, strict=True)
 
     # ------------------------------------------------------------------
-    def getROIDisplacementDiff(self):
-        dVecA = torch.stack(
-            self.A.getDisplacementVectors(useAnchor=True, useLabels=False)
-        )
-        dVecB = torch.stack(
-            self.B.getDisplacementVectors(useAnchor=True, useLabels=False)
-        )
-        out = dVecA - dVecB
-        if self.useLabels:
-            return dict(zip(self.labels, out))
-        return out
+    def get_vol_diff(self) -> dict[str, Any] | list[Any]:
+        """Per structure ``(V_A - V_B, relative to V_B, V_A, V_B)``."""
+        return self.A._keyed([a.get_vol_diff(b) for a, b in self._pairs()])
 
-    def alignA2B(self):
-        shiftVec = self.B.anchor - self.A.anchor
-        newMasks = [m.alignTo(shift_vec=shiftVec) for m in self.A.masks]
+    def get_sa_diff(self) -> dict[str, Any] | list[Any]:
+        """Per structure ``(S_A - S_B, relative to S_B, S_A, S_B)`` for surface areas."""
+        return self.A._keyed([a.get_sa_diff(b) for a, b in self._pairs()])
+
+    # ------------------------------------------------------------------
+    def get_roi_displacement_diff(self) -> dict[str, Tensor] | list[Tensor]:
+        """Displacement of each structure between A and B after aligning the anchors."""
+        vec_a = torch.stack(_as_list(self.A.get_displacement_vectors(use_anchor=True)))
+        vec_b = torch.stack(_as_list(self.B.get_displacement_vectors(use_anchor=True)))
+        return self.A._keyed(list(vec_a - vec_b))
+
+    def align_a_to_b(self) -> tuple[Region, Region]:
+        """Translate every mask in A so that A's anchor lands on B's; returns ``(A', B)``."""
+        shift_vec = self.B.anchor - self.A.anchor
         return (
             Region(
-                *newMasks,
+                *[m.align_to(shift_vec=shift_vec) for m in self.A.masks],
                 target=self.A.target,
-                anchor=self.A.anchor,
+                anchor=self.A.anchor + shift_vec,
                 labels=self.A.labels,
                 dev=self.A.dev,
             ),
@@ -90,117 +91,105 @@ class Metrics:
         )
 
     # ------------------------------------------------------------------
-    def getBSDDiff(self, mode: str = "all"):
-        if self.bsd is None:
-            self.bsd = [a.getBSD(b)[0] for a, b in zip(self.A.masks, self.B.masks)]
-        ml = mode.lower()
-        if ml == "asd":
-            out = [seriesAnalysis(b)[3] for b in self.bsd]
-        elif ml == "hd":
-            out = [seriesAnalysis(b)[-1] for b in self.bsd]
-        elif ml == "hd95":
-            out = [seriesAnalysis(b)[-2] for b in self.bsd]
-        else:
-            out = [seriesAnalysis(b) for b in self.bsd]
+    def get_bsd_diff(self, mode: str = "all") -> dict[str, Tensor] | list[Tensor]:
+        """Bidirectional surface distance between each A/B pair, centre-of-mass aligned.
 
-        if self.useLabels:
-            return dict(zip(self.labels, out))
-        return out
+        ``mode``: ``"asd"``, ``"hd"``, ``"hd95"``, or ``"all"`` for the full
+        :func:`series_analysis` vector.
+        """
+        if self._bsd is None:
+            self._bsd = [a.get_bsd(b)[0] for a, b in self._pairs()]
+
+        stats = [series_analysis(b) for b in self._bsd]
+        index = {"asd": 3, "hd": -1, "hd95": -2}.get(mode.lower())
+        return self.A._keyed(stats if index is None else [s[index] for s in stats])
 
     # ------------------------------------------------------------------
-    def getSeparationDistanceDiff(
+    def get_separation_distance_diff(
         self,
         mask: str = "volume",
         mode: str = "all",
         distances_only: bool = True,
-        chunk_size: int = 1,
-    ):
-        distA = self.A.getSeparationDistances(
-            mode=mask, distances_only=distances_only, chunk_size=chunk_size
-        )
-        distB = self.B.getSeparationDistances(
-            mode=mask, distances_only=distances_only, chunk_size=chunk_size
-        )
+        chunk_size: int | None = 1,
+    ) -> dict[str, Any] | list[Any]:
+        """Target-to-structure separation distances, summarised, for every non-target structure.
 
-        if self.A.useLabels:
-            distA = list(distA.values())
-        if self.B.useLabels:
-            distB = list(distB.values())
+        ``mask`` picks the voxels (``"volume"``, ``"surface"``, ``"rcvs"``); ``mode`` the
+        statistic (``"min"``, ``"max"``, ``"mean"``, ``"median"``, ``"p5"``, ``"p95"``, or
+        ``"all"``). Each entry is ``[f(A) - f(B), f(A), f(B)]``, followed by both sides' raw
+        :meth:`Region.get_separation_distances` outputs when ``distances_only=False``.
+        """
+        dist_a = _as_list(self.A.get_separation_distances(mask, distances_only, chunk_size))
+        dist_b = _as_list(self.B.get_separation_distances(mask, distances_only, chunk_size))
+        f = _STATISTICS.get(mode.lower(), series_analysis)
 
-        ml = mode.lower()
-        if ml == "max":
-            f = lambda x: x.float().max()
-        elif ml == "min":
-            f = lambda x: x.float().min()
-        elif ml == "p5":
-            f = lambda x: torch.quantile(x.float(), 0.05)
-        elif ml == "p95":
-            f = lambda x: torch.quantile(x.float(), 0.95)
-        elif ml == "mean":
-            f = lambda x: x.float().mean()
-        elif ml == "median":
-            f = lambda x: x.float().median()
-        else:
-            f = seriesAnalysis
-
-        if distances_only:
-            out = [[f(dA) - f(dB), f(dA), f(dB)] for dA, dB in zip(distA, distB)]
-        else:
-            out = [
-                [f(a[0]) - f(b[0]), f(a[0]), f(b[0]), *a, *b]
-                for a, b in zip(distA, distB)
-            ]
-
-        if self.useLabels:
-            non_target = [
-                l for i, l in enumerate(self.labels) if i != self.A.target_idx
-            ]
-            return dict(zip(non_target, out))
-        return out
+        out: list[Any] = []
+        for a, b in zip(dist_a, dist_b, strict=True):
+            d_a, d_b = (a, b) if distances_only else (a[0], b[0])
+            extra = [] if distances_only else [*a, *b]
+            out.append([f(d_a) - f(d_b), f(d_a), f(d_b), *extra])
+        return self.A._keyed(out, exclude_target=True)
 
     # ------------------------------------------------------------------
-    def getPercentageOverlapDiff(
+    def get_percentage_overlap_diff(
         self,
         mode: str = "volume",
         percentages_only: bool = True,
-        chunk_size: int = 1,
-    ):
-        percA = self.A.getThresholdedOverlapPercentages(
-            mode=mode, percentages_only=percentages_only, chunk_size=chunk_size
+        chunk_size: int | None = 1,
+    ) -> dict[str, Any] | list[Any]:
+        """Summary of each structure's thresholded overlap curve, A vs. B.
+
+        ``mode`` picks the voxels (``"volume"``, ``"surface"``, ``"rcvs"``). Each entry is
+        ``[s(A) - s(B), s(A), s(B)]`` with ``s`` = :func:`series_analysis`, followed by both
+        sides' raw :meth:`Region.get_thresholded_overlap_percentages` outputs when
+        ``percentages_only=False``.
+        """
+        perc_a = _as_list(
+            self.A.get_thresholded_overlap_percentages(mode, percentages_only, chunk_size)
         )
-        percB = self.B.getThresholdedOverlapPercentages(
-            mode=mode, percentages_only=percentages_only, chunk_size=chunk_size
+        perc_b = _as_list(
+            self.B.get_thresholded_overlap_percentages(mode, percentages_only, chunk_size)
         )
 
-        if self.A.useLabels:
-            percA = list(percA.values())
-        if self.B.useLabels:
-            percB = list(percB.values())
+        out: list[Any] = []
+        for a, b in zip(perc_a, perc_b, strict=True):
+            p_a, p_b = (a, b) if percentages_only else (a[0], b[0])
+            s_a, s_b = series_analysis(p_a), series_analysis(p_b)
+            extra = [] if percentages_only else [*a, *b]
+            out.append([s_a - s_b, s_a, s_b, *extra])
+        return self.A._keyed(out, exclude_target=True)
 
-        if percentages_only:
-            out = [
-                [
-                    seriesAnalysis(pA) - seriesAnalysis(pB),
-                    seriesAnalysis(pA),
-                    seriesAnalysis(pB),
-                ]
-                for pA, pB in zip(percA, percB)
-            ]
-        else:
-            out = [
-                [
-                    seriesAnalysis(a[0]) - seriesAnalysis(b[0]),
-                    seriesAnalysis(a[0]),
-                    seriesAnalysis(b[0]),
-                    *a,
-                    *b,
-                ]
-                for a, b in zip(percA, percB)
-            ]
+    # ------------------------------------------------------------------
+    # Deprecated camelCase API (guava-rt <= 0.5)
+    useLabels = alias_property("use_labels", "useLabels")
+    getVolDiff = alias(get_vol_diff, "getVolDiff")
+    getSADiff = alias(get_sa_diff, "getSADiff")
+    getROIDisplacementDiff = alias(get_roi_displacement_diff, "getROIDisplacementDiff")
+    alignA2B = alias(align_a_to_b, "alignA2B")
+    getBSDDiff = alias(get_bsd_diff, "getBSDDiff")
+    getSeparationDistanceDiff = alias(get_separation_distance_diff, "getSeparationDistanceDiff")
+    getPercentageOverlapDiff = alias(get_percentage_overlap_diff, "getPercentageOverlapDiff")
 
-        if self.useLabels:
-            non_target = [
-                l for i, l in enumerate(self.labels) if i != self.A.target_idx
-            ]
-            return dict(zip(non_target, out))
-        return out
+
+def _as_region(
+    masks: RegionLike,
+    target: int | str | None,
+    side_target: int | str | None,
+    anchor: int | str | ArrayLike | None,
+    side_anchor: int | str | ArrayLike | None,
+    labels: list[str] | None,
+    dev: Device,
+) -> Region:
+    if isinstance(masks, Region):
+        return masks
+    target = target if target is not None else side_target
+    anchor = anchor if anchor is not None else side_anchor
+    if target is None or anchor is None:
+        raise ValueError("building a Region from masks needs a target and an anchor")
+    # a stacked array/tensor is split along its first axis, one mask per structure
+    items = list(masks) if isinstance(masks, (np.ndarray, Tensor)) else masks
+    return Region(*items, target=target, anchor=anchor, labels=labels, dev=dev)
+
+
+def _as_list(values: dict[str, Any] | list[Any]) -> list[Any]:
+    return list(values.values()) if isinstance(values, dict) else values
