@@ -1,3 +1,16 @@
+## v1.0.0 (2026-10-12)
+
+### BREAKING CHANGE
+
+- RCVS-based results (get_rcvs and every mode/mask="rcvs"
+metric) change, mostly for structures close to the target. Summary
+statistics of empty inputs, including series_analysis, are now NaN
+instead of zeros.
+
+### Feat
+
+- ray end voxels no longer block RCVS rays
+
 ## v0.6.0 (2026-10-12)
 
 ### Feat
