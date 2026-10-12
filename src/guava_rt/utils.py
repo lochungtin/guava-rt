@@ -14,10 +14,10 @@ SERIES_ANALYSIS_LABELS = ["MIN", "P05", "P10", "AVG", "MDN", "P90", "P95", "MAX"
 
 
 def series_analysis(arr: Tensor) -> Tensor:
-    """The 8 statistics named in :data:`SERIES_ANALYSIS_LABELS`; zeros for an empty input."""
+    """The 8 statistics named in :data:`SERIES_ANALYSIS_LABELS`; NaN for an empty input."""
     arr = arr.flatten()
     if len(arr) == 0:
-        return torch.zeros(8, device=arr.device)
+        return torch.full((8,), float("nan"), device=arr.device)
     return torch.stack(
         [
             arr.min(),

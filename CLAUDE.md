@@ -30,7 +30,7 @@ Three layers, each wrapping the one below:
    - `volume` and `center_of_mass` are computed eagerly. `surface()`, `surface_area()`, `dmap()` (EDT of `~mask`) and `sdmap()` (EDT of `~surface`) are computed lazily and cached.
    - The surface is the mask minus its erosion by the union of the central axis planes. In 3-D that is an 18-neighbourhood, not the 6-connected cross.
    - `align_to` translates by a centre-of-mass difference or an explicit `shift_vec`, using `affine_grid` + nearest `grid_sample`.
-   - `get_rcvs` ray-casts from the source mask's surface to this mask's surface, chunked over source points (`chunk_size`).
+   - `get_rcvs` ray-casts from the source mask's surface to this mask's surface, chunked over source points (`chunk_size`). Samples are rounded to voxels, and samples in a ray's own end voxels never block it. Without that rule, every surface within about `(n_steps + 1) / 4` voxels of the target came out hidden (the bug fixed for 1.0).
 2. **`Region`** (`region.py`): an ordered list of masks for one patient position.
    - It has a `target` (index or label) and an `anchor` (a mask's centre of mass, or explicit coordinates).
    - It computes per-OAR quantities relative to the target. Results exclude the target and are dicts keyed by label when `labels` was given, otherwise lists (`Region._keyed`).
@@ -49,7 +49,3 @@ Supporting modules:
 - Coordinates and shift vectors are in voxels, ordered like the tensor dims (`(z, y, x)` / `(y, x)`). `affine_grid` wants x/y/z order; that flip lives only in `Mask.align_to`.
 - `dev` is passed through every constructor (default `"cpu"`).
 - Tests: geometry tests take the `ndim` fixture (`tests/conftest.py`) so they run in both 2-D and 3-D. `tests/helpers.py` builds synthetic balls, boxes and a four-organ region.
-
-## Known limitations
-
-- `get_rcvs` counts the ray end points' own voxels as obstructions. Surfaces closer than about `(n_steps + 1) / 4` voxels to the target are reported as hidden, and an empty RCVS then makes `get_thresholded_overlap_percentages` fail. `tests/test_mask.py::test_rcvs_of_adjacent_structure_is_not_empty` is a strict xfail that documents this.

@@ -131,3 +131,15 @@ def test_overlap_of_boxes(ndim: int) -> None:
     r = Region(target, box(shape, oar_lo, oar_hi), target=0, anchor=0)
     (percs,) = r.get_thresholded_overlap_percentages()
     assert torch.allclose(percs, torch.tensor([1 / 3, 2 / 3, 1.0]))
+
+
+def test_overlap_of_empty_mask(ndim: int) -> None:
+    """A structure with no voxels in the chosen mode gets an empty curve, not an error."""
+    x = organs(ndim)
+    r = Region(x[1], torch.zeros_like(x[1]), target=0, anchor=0)
+    ((percs, full, bins, d_vals, _, _),) = r.get_thresholded_overlap_percentages(
+        percentages_only=False
+    )
+    assert percs.numel() == d_vals.numel() == 0
+    assert full.eq(0).all() and bins.eq(0).all()
+    assert len(full) == int(r.target_dmap.max().ceil()) + 1

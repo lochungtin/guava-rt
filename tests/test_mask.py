@@ -182,16 +182,24 @@ def test_rcvs_occluded_by_another_part_of_itself() -> None:
     assert not face.mask[12:28, 44:].any()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ray end points round onto the source/target voxels themselves, so surfaces less "
-    "than ~(n_steps + 1) / 4 voxels from the target are reported as hidden",
-)
-def test_rcvs_of_adjacent_structure_is_not_empty() -> None:
+@pytest.mark.parametrize("gap", [0, 1, 2, 5])
+def test_rcvs_of_nearby_structure(gap: int) -> None:
+    """Short rays see the facing side: samples in a ray's own end voxels don't block it."""
     shape = (40, 40)
     target = Mask(box(shape, (10, 10), (30, 20)))
-    oar = Mask(box(shape, (10, 22), (30, 26)))
-    assert oar.get_rcvs(target, chunk_size=None).mask[12:28, 22].all()
+    oar = Mask(box(shape, (10, 20 + gap), (30, 24 + gap)))
+    face = oar.get_rcvs(target, chunk_size=None).mask
+    assert face[10:30, 20 + gap].all()
+    assert not face[11:29, 23 + gap].any()  # far side stays hidden behind the OAR itself
+
+
+def test_rcvs_of_nearby_structure_3d() -> None:
+    shape = (24, 24, 24)
+    target = Mask(box(shape, (6, 6, 4), (18, 18, 10)))
+    oar = Mask(box(shape, (6, 6, 11), (18, 18, 14)))
+    face = oar.get_rcvs(target, chunk_size=None).mask
+    assert face[6:18, 6:18, 11].all()
+    assert not face[7:17, 7:17, 13].any()
 
 
 @pytest.mark.gpu

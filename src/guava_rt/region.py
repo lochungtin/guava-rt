@@ -133,36 +133,44 @@ class Region:
         Each entry covers ``r`` from the mask's minimum to maximum separation distance. With
         ``percentages_only=False`` it is ``[percs, full, bins, distances, masked dmap, voxel
         mask]``, where ``full`` / ``bins`` hold the fraction / voxel count for every ``r`` from 0
-        to the target dmap's maximum.
+        to the target dmap's maximum. A mask with no voxels in ``mode`` (e.g. an OAR with no
+        visible surface) gets an empty ``percs`` and all-zero ``full`` / ``bins``.
         """
         max_dist = int(self.target_dmap.max().ceil().item())
         out: list[Any] = []
 
         for m in self._non_target():
             d_vals, masked, part = self._masked_dmap(m, mode, chunk_size)
-            d_min = int(d_vals.min().ceil().item())
-            d_max = int(d_vals.max().ceil().item())
-            n_mask = part.float().sum()
-
-            percs = torch.zeros(max(d_max - d_min + 1, 1), device=self.dev)
-            full = torch.zeros(max_dist + 1, device=self.dev)
-            bins = torch.zeros(max_dist + 1, device=self.dev)
-
-            for j, thresh in enumerate(range(d_min, d_max + 1)):
-                s = (d_vals <= thresh).float().sum()
-                p = s / n_mask
-                percs[j] = p
-                if thresh <= max_dist:
-                    full[thresh] = p
-                    bins[thresh] = s
-
-            if d_max <= max_dist:
-                full[d_max:] = 1.0
-                bins[d_max:] = n_mask
-
+            percs, full, bins = self._overlap_curves(d_vals, part, max_dist)
             out.append(percs if percentages_only else [percs, full, bins, d_vals, masked, part])
 
         return self._keyed(out, exclude_target=True)
+
+    def _overlap_curves(
+        self, d_vals: Tensor, part: Tensor, max_dist: int
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        full = torch.zeros(max_dist + 1, device=self.dev)
+        bins = torch.zeros(max_dist + 1, device=self.dev)
+        if d_vals.numel() == 0:
+            return torch.zeros(0, device=self.dev), full, bins
+
+        d_min = int(d_vals.min().ceil().item())
+        d_max = int(d_vals.max().ceil().item())
+        n_mask = part.float().sum()
+        percs = torch.zeros(max(d_max - d_min + 1, 1), device=self.dev)
+
+        for j, thresh in enumerate(range(d_min, d_max + 1)):
+            s = (d_vals <= thresh).float().sum()
+            p = s / n_mask
+            percs[j] = p
+            if thresh <= max_dist:
+                full[thresh] = p
+                bins[thresh] = s
+
+        if d_max <= max_dist:
+            full[d_max:] = 1.0
+            bins[d_max:] = n_mask
+        return percs, full, bins
 
     # ------------------------------------------------------------------
     # Deprecated camelCase API (guava-rt <= 0.5)

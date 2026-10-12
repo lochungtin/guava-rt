@@ -102,6 +102,19 @@ def test_separation_distance_statistics(ndim: int) -> None:
     assert len(out["near"]) == 3 + 2 * 3  # type: ignore[call-overload]
 
 
+@pytest.mark.parametrize("mode", ["min", "max", "mean", "median", "p5", "p95", "all"])
+def test_statistics_of_empty_structure_are_nan(ndim: int, mode: str) -> None:
+    x = organs(ndim)
+    y = list(x)
+    y[2] = torch.zeros_like(x[2])
+    m = make(x, y)
+    diff, a, b = m.get_separation_distance_diff(mode=mode)["near"]  # type: ignore[call-overload]
+    assert not a.isnan().any()
+    assert b.isnan().all() and diff.isnan().all()
+    overlap = m.get_percentage_overlap_diff()["near"]  # type: ignore[call-overload]
+    assert overlap[2].isnan().all()
+
+
 def test_percentage_overlap_details(ndim: int) -> None:
     x = organs(ndim)
     out = make(x, x).get_percentage_overlap_diff(percentages_only=False)

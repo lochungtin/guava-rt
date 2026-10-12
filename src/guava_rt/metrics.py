@@ -18,13 +18,23 @@ RegionLike = Region | Sequence[Mask | ArrayLike] | ArrayLike
 
 # Summary statistics for get_separation_distance_diff; any other mode gives series_analysis
 _STATISTICS: dict[str, Callable[[Tensor], Tensor]] = {
-    "max": lambda x: x.float().max(),
-    "min": lambda x: x.float().min(),
-    "p5": lambda x: torch.quantile(x.float(), 0.05),
-    "p95": lambda x: torch.quantile(x.float(), 0.95),
-    "mean": lambda x: x.float().mean(),
-    "median": lambda x: x.float().median(),
+    "max": lambda x: x.max(),
+    "min": lambda x: x.min(),
+    "p5": lambda x: torch.quantile(x, 0.05),
+    "p95": lambda x: torch.quantile(x, 0.95),
+    "mean": lambda x: x.mean(),
+    "median": lambda x: x.median(),
 }
+
+
+def _statistic(f: Callable[[Tensor], Tensor]) -> Callable[[Tensor], Tensor]:
+    """``f`` on a float tensor, NaN for an empty one (e.g. an OAR with no visible surface)."""
+
+    def wrapped(x: Tensor) -> Tensor:
+        x = x.float()
+        return f(x) if x.numel() else torch.tensor(float("nan"), device=x.device)
+
+    return wrapped
 
 
 class Metrics:
@@ -121,7 +131,7 @@ class Metrics:
         """
         dist_a = _as_list(self.A.get_separation_distances(mask, distances_only, chunk_size))
         dist_b = _as_list(self.B.get_separation_distances(mask, distances_only, chunk_size))
-        f = _STATISTICS.get(mode.lower(), series_analysis)
+        f = _statistic(_STATISTICS.get(mode.lower(), series_analysis))
 
         out: list[Any] = []
         for a, b in zip(dist_a, dist_b, strict=True):

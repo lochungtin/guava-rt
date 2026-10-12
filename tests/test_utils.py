@@ -19,7 +19,7 @@ def test_series_analysis_matches_numpy() -> None:
 
 
 def test_series_analysis_of_empty_input() -> None:
-    assert torch.equal(series_analysis(torch.zeros(0)), torch.zeros(8))
+    assert series_analysis(torch.zeros(0)).isnan().all()
 
 
 def test_pretty_print_table(capsys) -> None:  # type: ignore[no-untyped-def]

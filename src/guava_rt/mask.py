@@ -152,36 +152,35 @@ class Mask:
         """Ray-cast visible surface: the part of this surface with line of sight to ``ray_source``.
 
         Rays start on ``ray_source``'s surface plus an inner shell ``cut_away_dist`` voxels deep.
-        A ray is blocked if any of its ``n_steps`` interior samples lands in this mask or on the
-        ray-source shells. Source points are processed ``chunk_size`` at a time (``None``: all at
-        once) to bound memory, which is ``O(chunk_size * |surface| * n_steps)``.
+        Each ray is sampled at ``n_steps`` evenly spaced interior points, each rounded to its
+        voxel. The ray is blocked if any sample lands in this mask or on the ray-source shells,
+        other than in the ray's own start or end voxel. Source points are processed
+        ``chunk_size`` at a time (``None``: all at once) to bound memory, which is
+        ``O(chunk_size * |surface| * n_steps)``.
         """
         ndim = self.mask.ndim
 
         cut_mask = (self.dmap() * ray_source.mask.float() > cut_away_dist) & ray_source.mask
         ray_surface = Mask(cut_mask, self.dev).surface() | ray_source.surface()
 
-        source_coords = torch.argwhere(ray_surface).float()
-        self_coords = self.get_surface_coordinates().float()
+        source_coords = torch.argwhere(ray_surface)
+        self_coords = self.get_surface_coordinates()
         n_source, n_self = source_coords.shape[0], self_coords.shape[0]
 
-        t = torch.linspace(
-            2.0 / (n_steps + 1), (n_steps - 1.0) / (n_steps + 1), n_steps, device=self.dev
-        )
+        t = torch.arange(1, n_steps + 1, device=self.dev, dtype=torch.float32) / (n_steps + 1)
 
         occupied = self.mask | ray_surface
 
         def check_chunk(src_chunk: Tensor) -> Tensor:
-            # (source, target, step, ndim) sample points along every source → target ray
+            # (source, target, step, ndim) sample voxels along every source → target ray
             src = src_chunk[:, None, None, :]
             dst = self_coords[None, :, None, :]
-            pts = src + t[None, None, :, None] * (dst - src)
+            idx = (src + t[None, None, :, None] * (dst - src)).round().long()
 
-            idx = pts.round().long()
-            for dim, size in enumerate(self.shape):
-                idx[..., dim].clamp_(0, size - 1)
-
-            hit = occupied[tuple(idx[..., dim] for dim in range(ndim))]
+            # samples rounding onto the ray's own end voxels are not obstructions: the start
+            # voxel is on the source shell and the end voxel is in this mask by definition
+            at_end = (idx == src).all(dim=-1) | (idx == dst).all(dim=-1)
+            hit = occupied[tuple(idx[..., dim] for dim in range(ndim))] & ~at_end
             blocked = hit.any(dim=2)
             return (~blocked).any(dim=0)
 
@@ -196,7 +195,7 @@ class Mask:
 
         face = torch.zeros(self.shape, dtype=torch.bool, device=self.dev)
         if visible.any():
-            vc = self_coords[visible].long()
+            vc = self_coords[visible]
             face[tuple(vc[:, dim] for dim in range(ndim))] = True
         return Mask(face, self.dev)
 

@@ -26,6 +26,12 @@ The library provides formal, mathematically reproducible implementations of a su
 pip install guava-rt
 ```
 
+### Upgrading from 0.6
+
+`Mask.get_rcvs` (and every `mode="rcvs"` / `mask="rcvs"` metric) no longer counts the ray's own start and end voxels as obstructions. Before, any surface closer than about `(n_steps + 1) / 4` voxels to the target, i.e. 8 voxels by default, was reported as hidden, so nearby OARs had empty or nearly empty RCVS. Rays are now sampled evenly over the whole segment. RCVS results change, mostly for structures close to the target.
+
+A structure with no voxels in the chosen mode (e.g. an empty RCVS) no longer raises. Its overlap curve is empty, and its summary statistics, including `series_analysis` of an empty tensor, are NaN (previously zeros).
+
 ### Upgrading from 0.5
 
 The API now uses snake_case names (`getBSDDiff` → `get_bsd_diff`, `alignTo` → `align_to`, `useAnchor=` → `use_anchor=`, `cutAwayDist=` / `N=` → `cut_away_dist=` / `n_steps=`, and so on). The old camelCase methods, keyword arguments and attributes still work but emit a `DeprecationWarning`. `Mask.get_mask_coordinates()` returns an `(N, ndim)` tensor like `get_surface_coordinates()`; the deprecated `getMaskCoordinates()` still returns the old `torch.where` tuple.
@@ -181,7 +187,7 @@ When `mask="rcvs"`, the separation distance is computed only over the subset of 
 r_vw(a) = v + a · vw⃗,    a ∈ (0, 1)
 ```
 
-The ray is sampled at `n` evenly spaced steps. It is unobstructed if none of the sampled intermediate points fall inside the target mask `X_T` or the OAR itself `X_i`. A surface point `w` belongs to the RCVS `S*_i` if at least one unobstructed ray from any point in `S_T` reaches it:
+The ray is sampled at `n` evenly spaced points `a = k / (n + 1)`, `k = 1 … n` (`n_steps`, default 32), each rounded to its voxel. It is unobstructed if none of these sample voxels lies in the OAR `X_i` or on the target's surface, apart from the ray's own end voxels `v` and `w`. Rays also start from an inner shell of the target, `cut_away_dist` voxels (default 8) away from the OAR. A surface point `w` belongs to the RCVS `S*_i` if at least one unobstructed ray from any point in `S_T` reaches it:
 
 ```
 S*_i = { w ∈ S_i | |R'_w| ≥ 1 }
