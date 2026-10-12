@@ -174,12 +174,15 @@ jobs:
           cz changelog
           git add CHANGELOG.md
           # Only commit if there are staged changes (first release has no diff).
-          git diff --cached --quiet || git commit -m "docs: update CHANGELOG for $NEW_TAG [skip ci]"
+          # No [skip ci]: the tag moves onto this commit, and [skip ci] would also stop
+          # release.yml from running for the tag push.
+          git diff --cached --quiet || git commit -m "docs: update CHANGELOG for $NEW_TAG"
+          # Tag the changelog commit, so release.yml finds this version's section in CHANGELOG.md.
+          git tag -f "$NEW_TAG"
 
       - name: Push branch commits
         # Pushes the bump commit + the changelog commit (if any).
-        # Retriggers branch-ci.yml but guard skips it — the [skip ci] tag
-        # on the changelog commit also suppresses any stray runs.
+        # Retriggers branch-ci.yml, but the guard job skips bot commits.
         run: git push origin HEAD
 
       - name: Push tag separately
